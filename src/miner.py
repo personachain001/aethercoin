@@ -48,7 +48,7 @@ def main():
         result.hash = result.hash if hasattr(result, 'hash') and result.hash else result.compute_hash()
         print(f"\n✅ Block mined successfully!")
         print(f"   Nonce: {result.nonce}")
-        print(f"   Block hash: {result.hash}")
+        print(f"   Block hash: {result.hash()}")
         print(f"   Hash: {_hash_block_header(result).hex()}")
     else:
         print("\n❌ Mining failed")
