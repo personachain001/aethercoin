@@ -43,7 +43,7 @@ bandwidth over ASICs and CPUs.
 The current codebase (`v0.1.0`) provides:
 
 - ✅ Blockchain node with HTTP API
-- ✅ CPU mining (GigaHash algorithm)
+- ✅ CPU mining (GigaHash algorithm, single + multi-threaded)
 - ✅ Chain validation and state management
 - ✅ Wallet generation
 - ✅ Transaction creation and mempool
@@ -78,7 +78,11 @@ python3 src/cli.py test
 ### Mine (CPU)
 
 ```bash
+# Single-threaded mining
 python3 src/cli.py mine
+
+# Multi-threaded mining (use all CPU cores)
+python3 src/cli.py mine --threads 8
 ```
 
 ### Start Node
@@ -102,13 +106,15 @@ python3 src/cli.py wallet create
 
 ## Mining Performance
 
-**CPU benchmark** (Apple M-series, single core):
-- ~8,000-100,000 H/s at difficulty 4
-- 256MB memory usage per thread
+**CPU benchmark** (Apple M1, 8 threads):
+- Single thread: ~8,000-100,000 H/s at difficulty 4
+- Multi-thread (8 cores): ~60,000-800,000 H/s
+- 256MB shared memory buffer (all threads read from same buffer)
 
 **GPU projection:**
-- Expected 10-100x speedup due to memory bandwidth advantage
-- GDDR6 memory bandwidth: 300-1000 GB/s vs CPU DDR: 50-100 GB/s
+- Expected 10-100x speedup due to GDDR memory bandwidth advantage
+- GDDR6: 300-1000 GB/s vs CPU DDR5: 50-100 GB/s
+- GPU implementation (OpenCL/CUDA) planned for v0.3.0
 
 *Note: GPU mining support requires writing an OpenCL/CUDA implementation
 of the GigaHash algorithm. This is planned for a future release.*
