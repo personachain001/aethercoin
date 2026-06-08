@@ -24,8 +24,36 @@ import threading
 class NodeAPI(BaseHTTPRequestHandler):
     blockchain: Blockchain = None
     wallet: Wallet = None
+    _rate_limits: dict = {}  # IP -> list of timestamps
+    MAX_BODY_SIZE = 1_000_000  # 1MB max request body
+
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests."""
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def _check_rate_limit(self) -> bool:
+        """Basic rate limiting: max 60 requests per minute per IP."""
+        import time
+        now = time.time()
+        ip = self.client_address[0]
+        if ip not in self._rate_limits:
+            self._rate_limits[ip] = []
+        # Clean old entries
+        self._rate_limits[ip] = [
+            t for t in self._rate_limits[ip] if now - t < 60]
+        if len(self._rate_limits[ip]) > 60:
+            return False
+        self._rate_limits[ip].append(now)
+        return True
 
     def do_GET(self):
+        if not self._check_rate_limit():
+            self._json_response(429, {"error": "Too many requests"})
+            return
         if self.path == "/stats":
             self._json_response(200, self.blockchain.get_stats())
         elif self.path == "/blocks/latest":
@@ -49,7 +77,14 @@ class NodeAPI(BaseHTTPRequestHandler):
             self._json_response(404, {"error": "Not found", "path": self.path})
 
     def do_POST(self):
+        if not self._check_rate_limit():
+            self._json_response(429, {"error": "Too many requests"})
+            return
+
         content_length = int(self.headers.get("Content-Length", 0))
+        if content_length > self.MAX_BODY_SIZE:
+            self._json_response(413, {"error": "Request body too large"})
+            return
         body = self.rfile.read(content_length).decode()
         try:
             data = json.loads(body) if body else {}
