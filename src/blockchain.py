@@ -185,6 +185,7 @@ class Blockchain:
         else:
             self.chain = [self._create_genesis_block()]
             self._save_chain()
+            self._rebuild_utxo_set()  # Ensure genesis coinbase is in UTXO
 
         if os.path.exists(self.mempool_file):
             with open(self.mempool_file, "r") as f:
@@ -248,12 +249,21 @@ class Blockchain:
         return total / (10 ** COIN_DECIMALS)
 
     def add_transaction(self, tx: Transaction) -> bool:
-        """Add a transaction to the mempool."""
-        sender_balance = self.utxo_set.get(tx.sender, 0)
-        if tx.sender != "0" * 64 and sender_balance < tx.amount:
-            return False
+        """Add a transaction to the mempool, with double-spend prevention."""
         if tx.amount <= 0:
             return False
+        if tx.sender == "0" * 64:
+            return False  # Coinbase transactions are created during mining
+
+        # Check on-chain balance minus all pending mempool outbound amounts
+        on_chain = self.utxo_set.get(tx.sender, 0)
+        pending_out = sum(t.amount for t in self.mempool
+                         if t.sender == tx.sender)
+        available = on_chain - pending_out
+
+        if available < tx.amount:
+            return False
+
         self.mempool.append(tx)
         self._save_mempool()
         return True
