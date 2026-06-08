@@ -158,12 +158,13 @@ def compute_block_reward(height: int) -> int:
 class Blockchain:
     """The main blockchain database."""
 
-    def __init__(self, data_dir: str = "~/.kryomine"):
+    def __init__(self, data_dir: str = "~/.kryomine", mining_threads: int = 1):
         import os
         self.data_dir = os.path.expanduser(data_dir)
         self.chain_file = os.path.join(self.data_dir, "chain.json")
         self.mempool_file = os.path.join(self.data_dir, "mempool.json")
         self.utxo_file = os.path.join(self.data_dir, "utxo.json")
+        self.mining_threads = mining_threads
 
         os.makedirs(self.data_dir, exist_ok=True)
 
@@ -312,7 +313,7 @@ class Blockchain:
 
             # Mine (perform proof of work)
             print(f"Mining block #{self.get_height()} at difficulty {header.difficulty}...")
-            mined = mine_gigahash(block.header)
+            mined = mine_gigahash(block.header, threads=self.mining_threads)
             if mined is None:
                 print("Mining failed!")
                 return None
@@ -461,8 +462,14 @@ def _hash_block_header(header: BlockHeader) -> bytes:
     return hashlib.sha512(data).digest()
 
 
-def mine_gigahash(header: BlockHeader, memory_mb: int = MEMORY_SIZE_MB) -> Optional[BlockHeader]:
+def mine_gigahash(header: BlockHeader, memory_mb: int = MEMORY_SIZE_MB,
+                  threads: int = 1) -> Optional[BlockHeader]:
     """Mine a block using the GigaHash algorithm.
+
+    Args:
+        header: Block header to mine (nonce will be set)
+        memory_mb: Memory buffer size in MB
+        threads: Number of mining threads (1 = single-threaded)
 
     Returns the header with a valid nonce, or None if mining failed.
     """
@@ -478,50 +485,112 @@ def mine_gigahash(header: BlockHeader, memory_mb: int = MEMORY_SIZE_MB) -> Optio
     # Calculate target: smaller target = harder
     target_bits = 256 - int(log2(header.difficulty)) if header.difficulty > 0 else 256
     target = (1 << target_bits) - 1 if target_bits > 0 else 1
+    target_bytes = target.to_bytes(32, "big")
 
-    print(f"  Mining... (difficulty={header.difficulty})", flush=True)
+    if threads <= 1:
+        print(f"  Mining... (difficulty={header.difficulty}, 1 thread)", flush=True)
+        return _mine_single_thread(header, buffer, target_bytes)
+    else:
+        print(f"  Mining... (difficulty={header.difficulty}, {threads} threads)", flush=True)
+        return _mine_multi_thread(header, buffer, target_bytes, threads)
 
-    max_nonce = 2 ** 48  # Reasonable nonce space
+
+def _verify_nonce(buffer: bytes, buffer_len: int, nonce: int) -> bytes:
+    """Compute hash for a given nonce (used by both single and multi-thread)."""
+    pos1 = (nonce * 7 + 13) % (buffer_len - 64)
+    pos2 = (nonce * 31 + 97) % (buffer_len - 64)
+    pos3 = ((nonce ^ 0x5555) * 127 + 491) % (buffer_len - 64)
+    mixed = (buffer[pos1:pos1 + 64] +
+             buffer[pos2:pos2 + 32] +
+             buffer[pos3:pos3 + 32] +
+             struct.pack(">Q", nonce))
+    return hashlib.sha256(mixed).digest()
+
+
+def _mine_single_thread(header: BlockHeader, buffer: bytes,
+                        target_bytes: bytes) -> Optional[BlockHeader]:
+    """Mine with a single thread."""
+    max_nonce = 2 ** 48
     start_time = time.time()
     buffer_len = len(buffer)
+    target_int = int.from_bytes(target_bytes, "big")
 
     for nonce in range(max_nonce):
-        # Pick multiple positions in the memory buffer
-        # The positions depend on the nonce and seed for determinism
-        pos1 = (nonce * 7 + 13) % (buffer_len - 64)
-        pos2 = (nonce * 31 + 97) % (buffer_len - 64)
-        pos3 = ((nonce ^ 0x5555) * 127 + 491) % (buffer_len - 64)
-
-        # Mix data from buffer positions with nonce
-        mixed = (buffer[pos1:pos1 + 64] +
-                 buffer[pos2:pos2 + 32] +
-                 buffer[pos3:pos3 + 32] +
-                 struct.pack(">Q", nonce))
-
-        # Final hash
-        result = hashlib.sha256(mixed).digest()
-        result_int = int.from_bytes(result, "big")
-
-        if result_int <= target:
+        result = _verify_nonce(buffer, buffer_len, nonce)
+        if result <= target_bytes:
             elapsed = time.time() - start_time
             header.nonce = nonce
             print(f"  ✓ Block mined! Nonce={nonce}, {elapsed:.1f}s, "
                   f"hashrate: {nonce / elapsed:.0f} H/s (CPU)")
             return header
 
-        # Progress indicator
         if nonce % 100000 == 0 and nonce > 0:
             elapsed = time.time() - start_time
             if elapsed > 0:
+                tot = nonce * 1  # single thread
                 print(f"  ... {nonce} attempts, "
-                      f"{nonce / elapsed:.0f} H/s", flush=True)
+                      f"{tot / elapsed:.0f} H/s", flush=True)
 
-        # Timeout: if mining takes too long, return None
-        if time.time() - start_time > 300:  # 5 minutes timeout
+        if time.time() - start_time > 300:
             print("  ✗ Mining timed out after 5 minutes")
             return None
-
     return None
+
+
+def _mine_multi_thread(header: BlockHeader, buffer: bytes,
+                       target_bytes: bytes, num_threads: int) -> Optional[BlockHeader]:
+    """Mine with multiple threads searching different nonce ranges."""
+    import threading
+
+    result_holder = {"found": False, "nonce": 0}
+    lock = threading.Lock()
+    start_time = time.time()
+    buffer_len = len(buffer)
+    chunk_size = (2 ** 48) // num_threads
+
+    def worker(thread_id: int, start_nonce: int, end_nonce: int):
+        for nonce in range(start_nonce, end_nonce):
+            if result_holder["found"]:
+                return
+            result = _verify_nonce(buffer, buffer_len, nonce)
+            if result <= target_bytes:
+                with lock:
+                    if not result_holder["found"]:
+                        result_holder["found"] = True
+                        result_holder["nonce"] = nonce
+                return
+
+    threads = []
+    for i in range(num_threads):
+        start_n = i * chunk_size
+        end_n = (i + 1) * chunk_size if i < num_threads - 1 else 2 ** 48
+        t = threading.Thread(target=worker, args=(i, start_n, end_n), daemon=True)
+        threads.append(t)
+        t.start()
+
+    # Monitor progress while threads work
+    while any(t.is_alive() for t in threads):
+        elapsed = time.time() - start_time
+        if elapsed > 0 and result_holder["found"]:
+            break
+        if elapsed > 300:  # 5 minute timeout
+            result_holder["found"] = False  # Signal timeout
+            break
+        time.sleep(1.0)
+
+    for t in threads:
+        t.join(timeout=1)
+
+    if result_holder["found"]:
+        elapsed = time.time() - start_time
+        header.nonce = result_holder["nonce"]
+        print(f"  ✓ Block mined! Nonce={result_holder['nonce']}, {elapsed:.1f}s, "
+              f"hashrate: {result_holder['nonce'] * num_threads / elapsed:.0f} H/s "
+              f"({num_threads} threads)")
+        return header
+    else:
+        print(f"  ✗ Mining timed out after 5 minutes ({num_threads} threads)")
+        return None
 
 
 def verify_gigahash(header: BlockHeader, memory_mb: int = MEMORY_SIZE_MB) -> bool:
