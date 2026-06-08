@@ -14,6 +14,7 @@ import json
 import struct
 import threading
 import time
+import base64
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -30,12 +31,16 @@ COIN_DECIMALS = 8              # 1 KRYO = 10^8 satoshis
 
 @dataclass
 class Transaction:
-    """A single transaction on the blockchain."""
+    """A single transaction on the blockchain.
+
+    Signing: Uses ED25519 (when cryptography library is available).
+    Falls back to no-signing mode for development/testing.
+    """
     sender: str
     recipient: str
     amount: int         # In satoshis (10^-8 KRYO)
     timestamp: float = field(default_factory=time.time)
-    signature: str = ""  # Placeholder for future crypto signing
+    signature: str = ""  # Base64-encoded ED25519 signature (or empty)
 
     def to_dict(self) -> dict:
         return {
@@ -49,6 +54,36 @@ class Transaction:
     @classmethod
     def from_dict(cls, data: dict) -> "Transaction":
         return cls(**data)
+
+    def get_signing_data(self) -> bytes:
+        """Get the data to be signed (excludes signature field)."""
+        d = self.to_dict()
+        d.pop("signature", None)
+        return json.dumps(d, sort_keys=True).encode()
+
+    def sign(self, wallet) -> None:
+        """Sign this transaction using a Wallet instance."""
+        data = self.get_signing_data()
+        try:
+            sig = wallet.sign(data)
+            self.signature = base64.b64encode(sig).decode()
+        except Exception as e:
+            print(f"WARNING: Could not sign transaction: {e}")
+
+    def verify_signature(self, public_key_bytes: bytes) -> bool:
+        """Verify this transaction's signature against a public key."""
+        if not self.signature:
+            return False  # Unsigned transactions are invalid
+        try:
+            from wallet import Wallet
+            w = Wallet.__new__(Wallet)
+            return w.verify(
+                self.get_signing_data(),
+                base64.b64decode(self.signature),
+                public_key_bytes,
+            )
+        except Exception:
+            return False
 
     def hash(self) -> str:
         """Hash this transaction."""
