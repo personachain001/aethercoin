@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KryoMine (KRYO) — GPU-Mineable Cryptocurrency</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+        }
+        .container { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+        
+        header {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            padding: 16px 0;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+        }
+        nav { display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 22px; font-weight: bold; color: #00d4ff; text-decoration: none; }
+        .nav-links { display: flex; gap: 24px; }
+        .nav-links a { color: #ccc; text-decoration: none; font-size: 14px; transition: color 0.3s; }
+        .nav-links a:hover { color: #00d4ff; }
+        
+        .hero { padding: 140px 0 80px; text-align: center; color: white; }
+        .hero h1 { font-size: 44px; margin-bottom: 16px; }
+        .hero h1 span { color: #00d4ff; }
+        .hero p { font-size: 18px; opacity: 0.85; max-width: 700px; margin: 0 auto 36px; }
+        .btn {
+            display: inline-block;
+            background: #00d4ff;
+            color: #1a1a2e;
+            padding: 14px 36px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .btn:hover { background: #00b8e6; transform: translateY(-2px); }
+        .btn-outline {
+            background: transparent;
+            color: #00d4ff;
+            border: 2px solid #00d4ff;
+            margin-left: 16px;
+        }
+        .btn-outline:hover { background: rgba(0,212,255,0.1); }
+        
+        .alert {
+            background: rgba(255,193,7,0.15);
+            border: 1px solid rgba(255,193,7,0.3);
+            color: #ffc107;
+            padding: 16px 24px;
+            border-radius: 8px;
+            margin: 40px auto;
+            max-width: 700px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .alert strong { color: #ffc107; }
+        
+        section { padding: 80px 0; }
+        section h2 { text-align: center; font-size: 32px; margin-bottom: 48px; color: white; }
+        
+        .features { background: rgba(255,255,255,0.03); }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+        }
+        .feature-card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 32px;
+            border-radius: 12px;
+            transition: transform 0.3s;
+        }
+        .feature-card:hover { transform: translateY(-6px); }
+        .feature-card h3 { color: #00d4ff; font-size: 20px; margin-bottom: 12px; }
+        .feature-card p { color: #aaa; font-size: 15px; }
+        
+        .stats { background: rgba(0,0,0,0.3); }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 32px;
+            text-align: center;
+        }
+        .stat-item h2 { color: #00d4ff; font-size: 40px; margin-bottom: 8px; }
+        .stat-item p { color: #888; font-size: 14px; }
+        .stat-item a { color: #00d4ff; text-decoration: none; font-size: 18px; }
+        
+        .specs-table {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            border-collapse: collapse;
+        }
+        .specs-table td {
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .specs-table td:first-child { color: #888; width: 180px; }
+        .specs-table td:last-child { color: white; font-weight: 500; }
+        
+        .cta { text-align: center; color: white; }
+        .cta h2 { margin-bottom: 16px; }
+        .cta p { opacity: 0.8; margin-bottom: 32px; max-width: 600px; margin-left: auto; margin-right: auto; }
+        
+        footer {
+            background: rgba(0,0,0,0.4);
+            padding: 48px 0 32px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+        .footer-col h4 { color: white; margin-bottom: 16px; font-size: 14px; text-transform: uppercase; }
+        .footer-col a, .footer-col span {
+            display: block;
+            color: #777;
+            text-decoration: none;
+            margin-bottom: 8px;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+        .footer-col a:hover { color: #00d4ff; }
+        .footer-bottom {
+            text-align: center;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            color: #666;
+            font-size: 13px;
+        }
+        .footer-bottom a { color: #00d4ff; text-decoration: none; }
+        
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 32px; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <nav>
+                <a href="#" class="logo">⛏ KryoMine</a>
+                <div class="nav-links">
+                    <a href="#features">Features</a>
+                    <a href="#specs">Specifications</a>
+                    <a href="#status">Status</a>
+                    <a href="#start">Get Started</a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h1><span>KryoMine</span> — GPU Mining For Everyone</h1>
+            <p>A proof-of-work cryptocurrency with memory-hard GigaHash algorithm,
+            designed for GPU mining with verifiably fair distribution.</p>
+            <a href="#start" class="btn">Get Started</a>
+            <a href="https://github.com/personachain001/aethercoin" class="btn btn-outline">Source Code</a>
+        </div>
+    </section>
+
+    <div class="container">
+        <div class="alert">
+            <strong>⚠️ Alpha Software</strong><br>
+            KryoMine is in early development (v0.1.0). The testnet has not launched.
+            No coins have real value. This is experimental open-source code.
+        </div>
+    </div>
+
+    <section class="features" id="features">
+        <div class="container">
+            <h2>Core Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>🎮 GPU Mining</h3>
+                    <p>GigaHash algorithm requires 256MB memory per thread, naturally favoring GPUs with their high memory bandwidth (300-1000 GB/s).</p>
+                </div>
+                <div class="feature-card">
+                    <h3>⚖️ Fair Launch</h3>
+                    <p>No pre-mine. No ICO. No investor allocation. All KRYO coins are produced through mining, verifiable on-chain.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🛡️ Anti-ASIC</h3>
+                    <p>Memory-hard design makes ASIC development expensive. The memory bandwidth bottleneck favors commodity GPUs over custom chips.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📊 Fixed Supply</h3>
+                    <p>Maximum 21 million KRYO, with Bitcoin-like halving every 210,000 blocks (~4 years). No inflation surprises.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔧 Dynamic Difficulty</h3>
+                    <p>Difficulty adjusts every 2016 blocks to target 10-minute block times, maintaining stable mining economics.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔓 Open Source</h3>
+                    <p>MIT licensed. All code is open for inspection. No hidden features, no backdoors. Trust through transparency.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="specs">
+        <div class="container">
+            <h2>Technical Specifications</h2>
+            <table class="specs-table">
+                <tr><td>Algorithm</td><td>GigaHash (memory-hard PoW)</td></tr>
+                <tr><td>Max Supply</td><td>21,000,000 KRYO</td></tr>
+                <tr><td>Block Time</td><td>10 minutes (target)</td></tr>
+                <tr><td>Initial Reward</td><td>50 KRYO</td></tr>
+                <tr><td>Halving</td><td>Every 210,000 blocks</td></tr>
+                <tr><td>Memory Req.</td><td>256 MB per mining thread</td></tr>
+                <tr><td>Difficulty Adj.</td><td>Every 2016 blocks</td></tr>
+            </table>
+        </div>
+    </section>
+
+    <section id="start">
+        <div class="container" style="text-align: center;">
+            <h2>Run It Yourself</h2>
+            <div style="background: rgba(0,0,0,0.4); padding: 32px; border-radius: 12px; max-width: 700px; margin: 0 auto; text-align: left; font-family: monospace; color: #ccc;">
+                <span style="color: #00d4ff;">$</span> git clone https://github.com/personachain001/aethercoin.git<br>
+                <span style="color: #00d4ff;">$</span> cd aethercoin<br>
+                <span style="color: #00d4ff;">$</span> python3 src/cli.py test<br><br>
+                <span style="color: #888;"># Start mining (CPU):</span><br>
+                <span style="color: #00d4ff;">$</span> python3 src/cli.py mine<br><br>
+                <span style="color: #888;"># Start node server:</span><br>
+                <span style="color: #00d4ff;">$</span> python3 src/cli.py node --port 8333
+            </div>
+            <p style="color: #888; margin-top: 16px; font-size: 14px;">Requires Python 3.9+. No external dependencies.</p>
+        </div>
+    </section>
+
+    <section class="stats">
+        <div class="container">
+            <h2>Project Status</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h2>v0.1.0</h2>
+                    <p>Current Version (Alpha)</p>
+                </div>
+                <div class="stat-item">
+                    <h2>21,000,000</h2>
+                    <p>Max Supply (Design Parameter)</p>
+                </div>
+                <div class="stat-item">
+                    <h2><a href="https://github.com/personachain001/aethercoin">GitHub</a></h2>
+                    <p>Open Source Repository</p>
+                </div>
+                <div class="stat-item">
+                    <h2>MIT</h2>
+                    <p>License</p>
+                </div>
+            </div>
+            <p style="margin-top: 24px; color: #666; font-size: 13px; text-align: center;">
+                ⚠️ Testnet not yet launched. The above are design parameters, not live network data.
+            </p>
+        </div>
+    </section>
+
+    <section class="cta" id="status">
+        <div class="container">
+            <h2>Current Status & Roadmap</h2>
+            <p>
+                ✅ v0.1.0: Blockchain, CPU mining, wallet, node API<br>
+                🔜 v0.2.0: P2P networking<br>
+                🔜 v0.3.0: GPU mining (OpenCL/CUDA)<br>
+                🔜 v0.4.0: Transaction signing
+            </p>
+            <a href="https://github.com/personachain001/aethercoin" class="btn">Contribute on GitHub</a>
+            <a href="https://github.com/personachain001/aethercoin/blob/main/docs/whitepaper.md" class="btn btn-outline">Read Whitepaper</a>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <h4>Resources</h4>
+                    <a href="https://github.com/personachain001/aethercoin">GitHub Repository</a>
+                    <a href="https://github.com/personachain001/aethercoin/releases">Releases</a>
+                    <a href="https://github.com/personachain001/aethercoin/blob/main/docs/whitepaper.md">Whitepaper</a>
+                    <span style="color: #555;">Block Explorer (Planned)</span>
+                </div>
+                <div class="footer-col">
+                    <h4>Community</h4>
+                    <span style="color: #555;">Discord (Planned)</span>
+                    <span style="color: #555;">Twitter (Planned)</span>
+                    <a href="mailto:personachain001@gmail.com">Email Contact</a>
+                </div>
+                <div class="footer-col">
+                    <h4>Development</h4>
+                    <a href="https://github.com/personachain001/aethercoin">Source Code</a>
+                    <a href="https://github.com/personachain001/aethercoin/issues">Report Issues</a>
+                    <span style="color: #555;">Docs (Planned)</span>
+                </div>
+                <div class="footer-col">
+                    <h4>Contact</h4>
+                    <a href="mailto:personachain001@gmail.com">personachain001@gmail.com</a>
+                    <span style="color: #555;">Project: Early Stage</span>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 KryoMine. MIT Licensed. | <a href="mailto:personachain001@gmail.com">personachain001@gmail.com</a></p>
+                <p style="margin-top: 8px;">This is experimental software. No coins have real value. Testnet not launched.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
