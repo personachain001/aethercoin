@@ -12,7 +12,7 @@ Usage:
 import sys
 import time
 from blockchain import Blockchain, Transaction
-from wallet import Wallet, generate_address
+from wallet import Wallet
 
 
 def cmd_mine():
@@ -142,7 +142,8 @@ def cmd_test():
     # Test 4: Transaction
     print("4. Testing transaction...")
     sender = wallet.get_address()
-    recipient = generate_address()
+    recipient_wallet = Wallet(wallet_dir="/tmp/kryomine_test_rcpt")
+    recipient = recipient_wallet.create()
     tx = Transaction(sender=sender, recipient=recipient,
                      amount=int(1e8))  # 1 KRYO
     success = bc.add_transaction(tx)
