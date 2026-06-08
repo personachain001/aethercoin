@@ -1,4 +1,4 @@
-name: Deploy AetherCoin Website
+name: Deploy KryoMine Website
 
 on:
   push:
