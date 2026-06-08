@@ -17,7 +17,13 @@ from wallet import Wallet, generate_address
 
 def cmd_mine():
     """Mine blocks interactively."""
-    blockchain = Blockchain()
+    threads = 1
+    if "--threads" in sys.argv:
+        idx = sys.argv.index("--threads")
+        if idx + 1 < len(sys.argv):
+            threads = int(sys.argv[idx + 1])
+
+    blockchain = Blockchain(mining_threads=threads)
     wallet = Wallet()
     address = wallet.get_address()
     if not address:
@@ -26,6 +32,7 @@ def cmd_mine():
 
     print(f"Mining to: {address[:16]}...")
     print(f"Current height: {blockchain.get_height()}")
+    print(f"Threads: {threads}")
     print("Press Ctrl+C to stop mining\n")
 
     try:
@@ -186,12 +193,12 @@ def print_usage():
     print("KryoMine CLI v0.1.0")
     print()
     print("Commands:")
-    print("  mine    - Start mining")
-    print("  node    - Start node server")
-    print("  wallet  - Wallet operations")
-    print("  stats   - Show chain statistics")
-    print("  send    - Send a transaction")
-    print("  test    - Run self-test")
+    print("  mine [--threads N]   - Start mining")
+    print("  node                 - Start node server")
+    print("  wallet               - Wallet operations")
+    print("  stats                - Show chain statistics")
+    print("  send                 - Send a transaction")
+    print("  test                 - Run self-test")
 
 
 def main():
