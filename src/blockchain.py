@@ -279,9 +279,15 @@ class Blockchain:
         )
         transactions.append(coinbase)
 
-        # Add mempool transactions
+        # Add mempool transactions (with double-spend prevention)
+        temp_balances = dict(self.utxo_set)  # Track balances during tx selection
         for tx in self.mempool[:100]:  # Max 100 tx per block
-            if self.utxo_set.get(tx.sender, 0) >= tx.amount:
+            if tx.sender != "0" * 64:
+                available = temp_balances.get(tx.sender, 0)
+                if available >= tx.amount:
+                    transactions.append(tx)
+                    temp_balances[tx.sender] = available - tx.amount
+            else:
                 transactions.append(tx)
 
         block = Block(header=header, transactions=transactions)
@@ -332,16 +338,25 @@ class Blockchain:
                 interval_start.header.timestamp
             expected_time = DIFFICULTY_ADJUST_INTERVAL * TARGET_BLOCK_TIME
 
-            # Adjust difficulty
+            # Adjust difficulty (with 4x bounds, same as Bitcoin)
             if actual_time > 0:
                 ratio = expected_time / actual_time
+                # Clamp ratio to [0.25, 4.0] to prevent extreme difficulty swings
+                ratio = max(0.25, min(4.0, ratio))
                 new_diff = int(self.chain[-1].header.difficulty * ratio)
                 return max(1, new_diff)
 
         return self.chain[-1].header.difficulty
 
     def is_valid_chain(self) -> bool:
-        """Validate the entire chain."""
+        """Validate the entire chain, including genesis block."""
+        # Validate genesis block
+        genesis = self.chain[0]
+        if genesis.header.previous_hash != "0" * 64:
+            return False
+        if genesis.hash != genesis.compute_hash():
+            return False
+
         for i in range(1, len(self.chain)):
             block = self.chain[i]
             prev_block = self.chain[i - 1]
