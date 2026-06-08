@@ -206,8 +206,10 @@ with real value until:
 | Mining | GPU (planned) | CPU only | GPU | ASIC |
 | Max Supply | 21M | ~18.4M + tail | 21B | 21M |
 | Privacy | Planned | Default | None | None |
-| Fair Launch | Yes | No (contested) | Yes | Yes |
+| Fair Launch | Yes | No* | Yes | Yes |
 | Pre-mine | None | None | None | None |
+
+*Monero launched without pre-mine but had a fast initial emission curve (18.4M in ~8 years), which some consider unfair to late miners.
 
 ---
 
@@ -248,6 +250,10 @@ use, or improve.
 ## References
 
 1. Nakamoto, S. (2008). Bitcoin: A Peer-to-Peer Electronic Cash System.
+   https://bitcoin.org/bitcoin.pdf
 2. Ethereum Foundation. Ethash Design Rationale.
+   https://eth.wiki/en/concepts/ethash/design-rationale
 3. Ravencoin. KawPow algorithm specification.
+   https://github.com/RavenProject/Ravencoin/blob/master/KAWPOW.md
 4. RandomX. The RandomX Proof of Work Algorithm.
+   https://github.com/tevador/RandomX/blob/master/doc/design.md
