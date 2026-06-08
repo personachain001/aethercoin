@@ -12,6 +12,7 @@ large memory requirement, similar to Ethash.
 import hashlib
 import json
 import struct
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -169,6 +170,7 @@ class Blockchain:
         self.chain: list[Block] = []
         self.mempool: list[Transaction] = []
         self.utxo_set: dict[str, int] = {}  # address -> balance in satoshis
+        self._mine_lock = threading.Lock()
 
         self._load_chain()
 
@@ -258,71 +260,78 @@ class Blockchain:
 
     def mine_block(self, miner_address: str) -> Optional[Block]:
         """Mine a new block and add it to the chain."""
-        latest = self.get_latest_block()
-
-        # Create new block header
-        header = BlockHeader(
-            version=1,
-            previous_hash=latest.hash,
-            timestamp=time.time(),
-            difficulty=self._get_current_difficulty(),
-        )
-
-        # Collect transactions from mempool
-        transactions = []
-        # Coinbase transaction
-        reward = compute_block_reward(self.get_height())
-        coinbase = Transaction(
-            sender="0" * 64,
-            recipient=miner_address,
-            amount=reward,
-        )
-        transactions.append(coinbase)
-
-        # Add mempool transactions (with double-spend prevention)
-        temp_balances = dict(self.utxo_set)  # Track balances during tx selection
-        for tx in self.mempool[:100]:  # Max 100 tx per block
-            if tx.sender != "0" * 64:
-                available = temp_balances.get(tx.sender, 0)
-                if available >= tx.amount:
-                    transactions.append(tx)
-                    temp_balances[tx.sender] = available - tx.amount
-            else:
-                transactions.append(tx)
-
-        block = Block(header=header, transactions=transactions)
-        block.header.merkle_root = block.compute_merkle_root()
-
-        # Mine (perform proof of work)
-        print(f"Mining block #{self.get_height()} at difficulty {header.difficulty}...")
-        mined = mine_gigahash(block.header)
-        if mined is None:
-            print("Mining failed!")
+        # Prevent concurrent mining
+        if not self._mine_lock.acquire(blocking=False):
+            print("Mining already in progress, skipping.")
             return None
+        try:
+            latest = self.get_latest_block()
 
-        block.header = mined
+            # Create new block header
+            header = BlockHeader(
+                version=1,
+                previous_hash=latest.hash,
+                timestamp=time.time(),
+                difficulty=self._get_current_difficulty(),
+            )
 
-        block.hash = block.compute_hash()
+            # Collect transactions from mempool
+            transactions = []
+            # Coinbase transaction
+            reward = compute_block_reward(self.get_height())
+            coinbase = Transaction(
+                sender="0" * 64,
+                recipient=miner_address,
+                amount=reward,
+            )
+            transactions.append(coinbase)
 
-        # Add to chain
-        self.chain.append(block)
+            # Add mempool transactions (with double-spend prevention)
+            temp_balances = dict(self.utxo_set)  # Track balances during tx selection
+            for tx in self.mempool[:100]:  # Max 100 tx per block
+                if tx.sender != "0" * 64:
+                    available = temp_balances.get(tx.sender, 0)
+                    if available >= tx.amount:
+                        transactions.append(tx)
+                        temp_balances[tx.sender] = available - tx.amount
+                else:
+                    transactions.append(tx)
 
-        # Remove processed transactions from mempool
-        tx_ids = {t.hash() for t in transactions if t.sender != "0" * 64}
-        self.mempool = [t for t in self.mempool if t.hash() not in tx_ids]
+            block = Block(header=header, transactions=transactions)
+            block.header.merkle_root = block.compute_merkle_root()
 
-        # Update UTXO set
-        for tx in transactions:
-            if tx.sender != "0" * 64:
-                self.utxo_set[tx.sender] = self.utxo_set.get(
-                    tx.sender, 0) - tx.amount
-            self.utxo_set[tx.recipient] = self.utxo_set.get(
-                tx.recipient, 0) + tx.amount
+            # Mine (perform proof of work)
+            print(f"Mining block #{self.get_height()} at difficulty {header.difficulty}...")
+            mined = mine_gigahash(block.header)
+            if mined is None:
+                print("Mining failed!")
+                return None
 
-        self._save_chain()
-        self._save_mempool()
+            block.header = mined
 
-        return block
+            block.hash = block.compute_hash()
+
+            # Add to chain
+            self.chain.append(block)
+
+            # Remove processed transactions from mempool
+            tx_ids = {t.hash() for t in transactions if t.sender != "0" * 64}
+            self.mempool = [t for t in self.mempool if t.hash() not in tx_ids]
+
+            # Update UTXO set
+            for tx in transactions:
+                if tx.sender != "0" * 64:
+                    self.utxo_set[tx.sender] = self.utxo_set.get(
+                        tx.sender, 0) - tx.amount
+                self.utxo_set[tx.recipient] = self.utxo_set.get(
+                    tx.recipient, 0) + tx.amount
+
+            self._save_chain()
+            self._save_mempool()
+
+            return block
+        finally:
+            self._mine_lock.release()
 
     def _get_current_difficulty(self) -> int:
         """Calculate current mining difficulty."""
