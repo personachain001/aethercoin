@@ -18,6 +18,7 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from blockchain import Blockchain, Transaction
 from wallet import Wallet
+import threading
 
 
 class NodeAPI(BaseHTTPRequestHandler):
@@ -78,22 +79,24 @@ class NodeAPI(BaseHTTPRequestHandler):
                 })
 
         elif self.path == "/mine":
+            # Run mining in a separate thread to avoid blocking
             address = data.get("address", self.wallet.get_address())
             if not address:
                 self._json_response(400, {"error": "No miner address provided"})
                 return
 
             print(f"\n⛏ Mining triggered by {address}...")
-            block = self.blockchain.mine_block(address)
-            if block:
-                self._json_response(200, {
-                    "status": "mined",
-                    "block_hash": block.hash,
-                    "block_height": self.blockchain.get_height() - 1,
-                    "reward": block.transactions[0].amount,
-                })
-            else:
-                self._json_response(500, {"error": "Mining failed"})
+            # Start mining in background thread
+            def mine_async():
+                block = self.blockchain.mine_block(address)
+                if block:
+                    print(f"✅ Block mined: {block.hash[:16]}...")
+            
+            threading.Thread(target=mine_async, daemon=True).start()
+            self._json_response(202, {
+                "status": "mining_started",
+                "message": "Mining started in background. Check /stats for results."
+            })
 
         else:
             self._json_response(404, {"error": "Not found"})
@@ -115,6 +118,8 @@ def main():
     parser = argparse.ArgumentParser(description="KryoMine Node")
     parser.add_argument("--port", type=int, default=8333,
                         help="Node port (default: 8333)")
+    parser.add_argument("--bind", default="127.0.0.1",
+                        help="Bind address (default: 127.0.0.1, use 0.0.0.0 for public)")
     parser.add_argument("--data-dir", default="~/.kryomine",
                         help="Data directory (default: ~/.kryomine)")
     args = parser.parse_args()
@@ -148,7 +153,8 @@ def main():
     print(f"  POST /mine          — Mine a block")
     print()
 
-    server = HTTPServer(("0.0.0.0", args.port), NodeAPI)
+    server = HTTPServer((args.bind, args.port), NodeAPI)
+    print(f"🌐 Node running on http://{args.bind}:{args.port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
