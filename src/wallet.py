@@ -1,8 +1,8 @@
 """
 KryoMine Wallet — Simple wallet management.
 
-Generates ED25519 keypairs for signing transactions.
-Uses the cryptography library for secure key generation.
+Uses SHA-256 hashing for address generation.
+ED25519 cryptographic signing is planned for v0.4.0.
 
 Usage:
     python wallet.py create     # Create new wallet
